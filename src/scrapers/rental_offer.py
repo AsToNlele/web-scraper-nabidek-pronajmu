@@ -25,3 +25,9 @@ class RentalOffer:
 
     total_price: int | None = None
     """Cena použitá pro filtrování, pokud scraper umí spočítat nájem + poplatky"""
+
+    rent_price: int | None = None
+    """Nájem bez poplatků, pokud ho scraper umí odlišit"""
+
+    fees_price: int | None = None
+    """Poplatky nebo energie, pokud je scraper umí odlišit"""

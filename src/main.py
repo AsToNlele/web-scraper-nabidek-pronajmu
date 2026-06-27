@@ -39,6 +39,14 @@ def should_publish_offers(first_time: bool) -> bool:
 
 
 def format_price(offer: RentalOffer) -> str:
+    if (
+        offer.total_price is not None
+        and offer.rent_price is not None
+        and offer.fees_price is not None
+        and offer.fees_price > 0
+    ):
+        return f"{offer.total_price} Kč ({offer.rent_price} Kč nájem + {offer.fees_price} Kč poplatky)"
+
     if offer.total_price is not None:
         return f"{offer.total_price} Kč"
 

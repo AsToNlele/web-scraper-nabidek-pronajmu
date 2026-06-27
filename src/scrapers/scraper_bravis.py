@@ -67,6 +67,8 @@ class ScraperBravis(ScraperBase):
                 price = rent_price,
                 image_url = urljoin(self.base_url, image.get("src")),
                 total_price = total_price,
+                rent_price = rent_price,
+                fees_price = total_price - rent_price,
             ))
 
         return items

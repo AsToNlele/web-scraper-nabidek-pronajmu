@@ -113,6 +113,8 @@ class ScraperUlovDomov(ScraperBase):
                 price = offer["price_rental"],
                 image_url = offer["photos"][0]["path"],
                 total_price = offer["price_rental"] + offer["price_monthly_fee"],
+                rent_price = offer["price_rental"],
+                fees_price = offer["price_monthly_fee"],
             ))
 
         return items

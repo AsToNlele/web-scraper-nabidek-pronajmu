@@ -3,6 +3,7 @@ author: Mark Barzali
 """
 
 import json
+import logging
 from abc import ABC as abstract
 from typing import ClassVar
 
@@ -72,11 +73,36 @@ class ScraperBezrealitky(ScraperBase):
         return requests.post(
             url=f"{ScraperBezrealitky.API}{ScraperBezrealitky.Routes.GRAPHQL}",
             json=self._config,
-            headers=headers
+            headers=headers,
+            timeout=20
         )
 
     def get_latest_offers(self) -> list[RentalOffer]:
-        response = self.build_response().json()
+        raw_response = self.build_response()
+        if not raw_response.ok:
+            logging.warning(
+                "BezRealitky request failed with HTTP %s, skipping scraper",
+                raw_response.status_code
+            )
+            return []
+
+        try:
+            response = raw_response.json()
+        except ValueError:
+            logging.warning(
+                "BezRealitky returned a non-JSON response with content type %s, skipping scraper",
+                raw_response.headers.get("content-type", "unknown")
+            )
+            return []
+
+        if response.get("errors"):
+            logging.warning("BezRealitky returned GraphQL errors, skipping scraper")
+            return []
+
+        items = response.get("data", {}).get("listAdverts", {}).get("list")
+        if not isinstance(items, list):
+            logging.warning("BezRealitky response did not include offer data, skipping scraper")
+            return []
 
         return [  # type: list[RentalOffer]
             RentalOffer(
@@ -90,5 +116,5 @@ class ScraperBezrealitky(ScraperBase):
                 rent_price=item["price"],
                 fees_price=item["charges"],
             )
-            for item in response["data"]["listAdverts"]["list"]
+            for item in items
         ]

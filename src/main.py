@@ -71,12 +71,12 @@ async def process_latest_offers():
             new_offers.append(offer)
 
     first_time = storage.first_time
-    storage.save_offers(new_offers)
 
     logging.info("Offers fetched (new: {})".format(len(new_offers)))
 
     if config.debug and not config.force_discord:
         logging.info("Debug mode is active, skipping Discord publishing")
+        storage.save_offers(new_offers)
     elif should_publish_offers(first_time):
         if not new_offers:
             logging.info("No new offers to publish")
@@ -102,10 +102,15 @@ async def process_latest_offers():
 
                 embeds.append(embed)
 
-            await retry_until_successful_send(channel, embeds)
+            if not await retry_until_successful_send(channel, embeds):
+                logging.error("Publishing failed, leaving unsent offers out of storage for the next run")
+                return
+
+            storage.save_offers(offer_batch)
             await asyncio.sleep(1.5)
     elif first_time:
         logging.info("No previous offers, first fetch is running silently")
+        storage.save_offers(new_offers)
 
     global daytime, interval_time
     if daytime != get_current_daytime():  # Pokud stary daytime neodpovida novemu
@@ -121,18 +126,18 @@ async def process_latest_offers():
         await retry_until_successful_edit(channel, f"Last update <t:{int(time())}:R>")
 
 
-async def retry_until_successful_send(channel: discord.TextChannel, embeds: list[discord.Embed], delay: float = 5.0):
+async def retry_until_successful_send(channel: discord.TextChannel, embeds: list[discord.Embed], delay: float = 5.0) -> bool:
     """Retry sending a message with embeds until it succeeds."""
     while True:
         try:
             await channel.send(embeds=embeds)
             logging.info("Embeds successfully sent.")
-            return
+            return True
         except discord.errors.DiscordServerError as e:
             logging.warning(f"Discord server error while sending embeds: {e}. Retrying in {delay:.1f}s.")
         except discord.errors.Forbidden as e:
             logging.error(f"Discord rejected sending embeds because of missing permissions: {e}.")
-            return
+            return False
         except discord.errors.HTTPException as e:
             logging.warning(f"HTTPException while sending embeds: {e}. Retrying in {delay:.1f}s.")
         except Exception as e:

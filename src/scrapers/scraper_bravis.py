@@ -56,14 +56,29 @@ class ScraperBravis(ScraperBase):
             link = item.select_one("a")
             if not all((title, location, price, image, link)):
                 continue
+            rent_price = int(re.sub(r"[^\d]", "", next(price.stripped_strings, "0")) or "0")
+            total_price = rent_price + parse_monthly_fee(price)
 
             items.append(RentalOffer(
                 scraper = self,
                 link = urljoin(self.base_url, link.get("href")),
                 title = title.get_text().strip(),
                 location = location.get_text().strip(),
-                price = int(re.sub(r"[^\d]", "", next(price.stripped_strings, "0")) or "0"),
-                image_url = urljoin(self.base_url, image.get("src"))
+                price = rent_price,
+                image_url = urljoin(self.base_url, image.get("src")),
+                total_price = total_price,
             ))
 
         return items
+
+
+def parse_monthly_fee(price_element) -> int:
+    fee_text = price_element.find("small")
+    if fee_text is None:
+        return 0
+
+    match = re.search(r"\+?\s*(\d[\d\s\u00a0.]*)", fee_text.get_text())
+    if not match:
+        return 0
+
+    return int(re.sub(r"\D", "", match.group(1)) or "0")

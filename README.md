@@ -55,8 +55,8 @@ Tyto hodnoty jsou nastavené pro bězné použití a není potřeba ji měnit. Z
 - `DEBUG` (boolean, výchozí vypnuto). Aktivuje režim ladění aplikace, především podrobnějšího výpisu do konzole. Vhodné pro vývoj.
 - `FORCE_DISCORD` (boolean, výchozí vypnuto). Při hodnotě `1` povolí odesílání do Discordu i v debug režimu a odešle nabídky i při prvním načtení prázdného úložiště.
 - `UPDATE_CHANNEL_TOPIC` (boolean, výchozí vypnuto). Při hodnotě `1` aktualizuje topic Discord kanálu časem poslední kontroly. Bot k tomu potřebuje oprávnění `Manage Channel`.
-- `PRICE_MIN` (volitelné číslo). Minimální cena nabídky v Kč. Prázdná hodnota filtr vypne.
-- `PRICE_MAX` (volitelné číslo). Maximální cena nabídky v Kč. Prázdná hodnota filtr vypne.
+- `PRICE_MIN` (volitelné číslo). Minimální cena nabídky v Kč. Prázdná hodnota filtr vypne. Pokud scraper rozlišuje nájem a poplatky, použije se jejich součet.
+- `PRICE_MAX` (volitelné číslo). Maximální cena nabídky v Kč. Prázdná hodnota filtr vypne. Pokud scraper rozlišuje nájem a poplatky, použije se jejich součet.
 - `EXCLUDED_LOCALITIES` (volitelný seznam oddělený čárkou). Části lokality, které se nemají posílat do Discordu, např. `Žebětín,Bystrc`. Porovnává se bez ohledu na velikost písmen a diakritiku.
 - `FOUND_OFFERS_FILE` Cesta k souboru, kam se ukládají dříve nalezené nabídky. Aplikace si soubor vytvoří, ale složka musí existovat. Pokud aplikace nebyla nějakou dobu spuštěna (řádově týdny) je dobré tento soubor smazat - aplikace by toto vyhodnotila jako velké množství nových nabídek a zaspamovala by Discord kanál.
 - `REFRESH_INTERVAL_DAYTIME_MINUTES` - interval po který se mají stáhnout nejnovější nabídky Výchozí 30min, doporučeno minimálně 10min

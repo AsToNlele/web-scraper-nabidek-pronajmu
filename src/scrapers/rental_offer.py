@@ -22,3 +22,6 @@ class RentalOffer:
 
     scraper: 'ScraperBase'
     """Odkaz na instanci srapera, ze kterého tato nabídka pochází"""
+
+    total_price: int | None = None
+    """Cena použitá pro filtrování, pokud scraper umí spočítat nájem + poplatky"""

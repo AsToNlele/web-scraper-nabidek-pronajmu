@@ -38,6 +38,13 @@ def should_publish_offers(first_time: bool) -> bool:
     return discord_enabled() and (not first_time or config.force_discord)
 
 
+def format_price(offer: RentalOffer) -> str:
+    if offer.total_price is not None:
+        return f"{offer.total_price} Kč"
+
+    return f"{offer.price} Kč"
+
+
 @client.event
 async def on_ready():
     global channel, storage
@@ -109,7 +116,7 @@ async def process_latest_offers():
                     timestamp=datetime.utcnow(),
                     color=offer.scraper.color
                 )
-                embed.add_field(name="Cena", value=str(offer.price) + " Kč")
+                embed.add_field(name="Cena", value=format_price(offer))
                 embed.set_author(name=offer.scraper.name, icon_url=offer.scraper.logo_url)
                 embed.set_image(url=offer.image_url)
 

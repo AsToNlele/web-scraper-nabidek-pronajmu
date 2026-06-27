@@ -111,7 +111,8 @@ class ScraperUlovDomov(ScraperBase):
                 title = "Pronájem " + self.disposition_id_to_string(offer["disposition_id"]) + " " + str(offer["acreage"]) + " m²",
                 location = location,
                 price = offer["price_rental"],
-                image_url = offer["photos"][0]["path"]
+                image_url = offer["photos"][0]["path"],
+                total_price = offer["price_rental"] + offer["price_monthly_fee"],
             ))
 
         return items

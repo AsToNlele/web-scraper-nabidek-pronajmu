@@ -86,6 +86,7 @@ class ScraperBezrealitky(ScraperBase):
                 location=item["address"],
                 price=f"{item['price']} / {item['charges']}",
                 image_url=item["mainImage"]["url"] if item["mainImage"] else "",
+                total_price=item["price"] + item["charges"],
             )
             for item in response["data"]["listAdverts"]["list"]
         ]

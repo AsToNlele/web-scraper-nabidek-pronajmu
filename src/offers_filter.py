@@ -34,7 +34,7 @@ class OfferFilter:
         return accepted, rejected
 
     def reject_reason(self, offer: RentalOffer) -> str | None:
-        price = parse_price(offer.price)
+        price = offer.total_price if offer.total_price is not None else parse_price(offer.price)
         price_filter_enabled = self.price_min is not None or self.price_max is not None
         if price_filter_enabled and (price is None or price <= 0):
             return "unknown price"

@@ -109,32 +109,23 @@ async def process_latest_offers():
         if not filtered_offers:
             logging.info("No new offers to publish")
 
-        def chunk_offers(offers, size):
-            for i in range(0, len(offers), size):
-                yield offers[i:i + size]
+        for offer in filtered_offers:
+            embed = discord.Embed(
+                title=offer.title,
+                url=offer.link,
+                description=offer.location,
+                timestamp=datetime.utcnow(),
+                color=offer.scraper.color
+            )
+            embed.add_field(name="Cena", value=format_price(offer))
+            embed.set_author(name=offer.scraper.name, icon_url=offer.scraper.logo_url)
+            embed.set_image(url=offer.image_url)
 
-        for offer_batch in chunk_offers(filtered_offers, config.embed_batch_size):
-            embeds = []
-
-            for offer in offer_batch:
-                embed = discord.Embed(
-                    title=offer.title,
-                    url=offer.link,
-                    description=offer.location,
-                    timestamp=datetime.utcnow(),
-                    color=offer.scraper.color
-                )
-                embed.add_field(name="Cena", value=format_price(offer))
-                embed.set_author(name=offer.scraper.name, icon_url=offer.scraper.logo_url)
-                embed.set_image(url=offer.image_url)
-
-                embeds.append(embed)
-
-            if not await retry_until_successful_send(channel, embeds):
+            if not await retry_until_successful_send(channel, embed):
                 logging.error("Publishing failed, leaving unsent offers out of storage for the next run")
                 return
 
-            storage.save_offers(offer_batch)
+            storage.save_offers([offer])
             await asyncio.sleep(1.5)
     elif first_time:
         logging.info("No previous offers, first fetch is running silently")
@@ -154,22 +145,22 @@ async def process_latest_offers():
         await retry_until_successful_edit(channel, f"Last update <t:{int(time())}:R>")
 
 
-async def retry_until_successful_send(channel: discord.TextChannel, embeds: list[discord.Embed], delay: float = 5.0) -> bool:
-    """Retry sending a message with embeds until it succeeds."""
+async def retry_until_successful_send(channel: discord.TextChannel, embed: discord.Embed, delay: float = 5.0) -> bool:
+    """Retry sending a message with one embed until it succeeds."""
     while True:
         try:
-            await channel.send(embeds=embeds)
-            logging.info("Embeds successfully sent.")
+            await channel.send(embed=embed)
+            logging.info("Embed successfully sent.")
             return True
         except discord.errors.DiscordServerError as e:
-            logging.warning(f"Discord server error while sending embeds: {e}. Retrying in {delay:.1f}s.")
+            logging.warning(f"Discord server error while sending embed: {e}. Retrying in {delay:.1f}s.")
         except discord.errors.Forbidden as e:
-            logging.error(f"Discord rejected sending embeds because of missing permissions: {e}.")
+            logging.error(f"Discord rejected sending embed because of missing permissions: {e}.")
             return False
         except discord.errors.HTTPException as e:
-            logging.warning(f"HTTPException while sending embeds: {e}. Retrying in {delay:.1f}s.")
+            logging.warning(f"HTTPException while sending embed: {e}. Retrying in {delay:.1f}s.")
         except Exception as e:
-            logging.exception(f"Unexpected error while sending embeds: {e}. Retrying in {delay:.1f}s.")
+            logging.exception(f"Unexpected error while sending embed: {e}. Retrying in {delay:.1f}s.")
             raise e
         await asyncio.sleep(delay)
 

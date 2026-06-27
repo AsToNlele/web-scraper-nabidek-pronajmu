@@ -1,4 +1,5 @@
 #!/usr/bin/evn python3
+import asyncio
 import logging
 from datetime import datetime
 from time import time
@@ -11,8 +12,7 @@ from discord_logger import DiscordLogger
 from offers_storage import OffersStorage
 from scrapers.rental_offer import RentalOffer
 from scrapers_manager import create_scrapers, fetch_latest_offers
-from datetime import datetime
-import asyncio
+
 
 def get_current_daytime() -> bool: return datetime.now().hour in range(6, 22)
 
@@ -23,6 +23,15 @@ interval_time = config.refresh_interval_daytime_minutes if daytime else config.r
 
 scrapers = create_scrapers(config.dispositions)
 
+
+def discord_enabled() -> bool:
+    return not config.debug or config.force_discord
+
+
+def should_publish_offers(first_time: bool) -> bool:
+    return discord_enabled() and (not first_time or config.force_discord)
+
+
 @client.event
 async def on_ready():
     global channel, storage
@@ -31,13 +40,22 @@ async def on_ready():
     channel = client.get_channel(config.discord.offers_channel)
     storage = OffersStorage(config.found_offers_file)
 
-    if not config.debug:
+    if discord_enabled():
         discord_error_logger = DiscordLogger(client, dev_channel, logging.ERROR)
         logging.getLogger().addHandler(discord_error_logger)
     else:
         logging.info("Discord logger is inactive in debug mode")
 
     logging.info("Available scrapers: " + ", ".join([s.name for s in scrapers]))
+    logging.info(
+        "Effective config: debug=%s force_discord=%s update_channel_topic=%s found_offers_file=%s offers_channel=%s dev_channel=%s",
+        config.debug,
+        config.force_discord,
+        config.update_channel_topic,
+        config.found_offers_file,
+        config.discord.offers_channel,
+        config.discord.dev_channel
+    )
 
     logging.info("Fetching latest offers every {} minutes".format(interval_time))
 
@@ -57,7 +75,12 @@ async def process_latest_offers():
 
     logging.info("Offers fetched (new: {})".format(len(new_offers)))
 
-    if not first_time:
+    if config.debug and not config.force_discord:
+        logging.info("Debug mode is active, skipping Discord publishing")
+    elif should_publish_offers(first_time):
+        if not new_offers:
+            logging.info("No new offers to publish")
+
         def chunk_offers(offers, size):
             for i in range(0, len(offers), size):
                 yield offers[i:i + size]
@@ -81,7 +104,7 @@ async def process_latest_offers():
 
             await retry_until_successful_send(channel, embeds)
             await asyncio.sleep(1.5)
-    else:
+    elif first_time:
         logging.info("No previous offers, first fetch is running silently")
 
     global daytime, interval_time
@@ -94,7 +117,8 @@ async def process_latest_offers():
         logging.info("Fetching latest offers every {} minutes".format(interval_time))
         process_latest_offers.change_interval(minutes=interval_time)
 
-    await retry_until_successful_edit(channel, f"Last update <t:{int(time())}:R>")
+    if discord_enabled() and config.update_channel_topic:
+        await retry_until_successful_edit(channel, f"Last update <t:{int(time())}:R>")
 
 
 async def retry_until_successful_send(channel: discord.TextChannel, embeds: list[discord.Embed], delay: float = 5.0):
@@ -106,6 +130,9 @@ async def retry_until_successful_send(channel: discord.TextChannel, embeds: list
             return
         except discord.errors.DiscordServerError as e:
             logging.warning(f"Discord server error while sending embeds: {e}. Retrying in {delay:.1f}s.")
+        except discord.errors.Forbidden as e:
+            logging.error(f"Discord rejected sending embeds because of missing permissions: {e}.")
+            return
         except discord.errors.HTTPException as e:
             logging.warning(f"HTTPException while sending embeds: {e}. Retrying in {delay:.1f}s.")
         except Exception as e:
@@ -123,6 +150,9 @@ async def retry_until_successful_edit(channel: discord.TextChannel, topic: str, 
             return
         except discord.errors.DiscordServerError as e:
             logging.warning(f"Discord server error while editing topic: {e}. Retrying in {delay:.1f}s.")
+        except discord.errors.Forbidden as e:
+            logging.warning(f"Discord rejected editing the channel topic because of missing permissions: {e}.")
+            return
         except discord.errors.HTTPException as e:
             logging.warning(f"HTTPException while editing topic: {e}. Retrying in {delay:.1f}s.")
         except Exception as e:

@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 
 from disposition import Disposition
 
+_original_environment = os.environ.copy()
+
 load_dotenv(".env")
 
 app_env = os.getenv("APP_ENV")
@@ -15,6 +17,7 @@ if app_env:
     load_dotenv(".env." + app_env, override=True)
 
 load_dotenv(".env.local", override=True)
+os.environ.update(_original_environment)
 
 _str_to_disposition_map = {
     "1+kk": Disposition.FLAT_1KK,
@@ -36,6 +39,8 @@ def dispositions_converter(raw_disps: str):
 @environ.config(prefix="")
 class Config:
     debug: bool = environ.bool_var()
+    force_discord: bool = environ.bool_var(default=False)
+    update_channel_topic: bool = environ.bool_var(default=False)
     found_offers_file: Path = environ.var(converter=Path)
     refresh_interval_daytime_minutes: int = environ.var(converter=int)
     refresh_interval_nighttime_minutes: int = environ.var(converter=int)

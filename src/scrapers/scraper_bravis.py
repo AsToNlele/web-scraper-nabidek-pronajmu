@@ -40,23 +40,30 @@ class ScraperBravis(ScraperBase):
 
     def get_latest_offers(self) -> list[RentalOffer]:
         response = self.build_response()
+        if not response.ok:
+            logging.warning("BRAVIS request failed with HTTP %s, skipping scraper", response.status_code)
+            return []
+
         soup = BeautifulSoup(response.text, 'html.parser')
 
         items: list[RentalOffer] = []
 
-        for item in soup.select("#search > .in > .itemslist > li"):
-            if item.get("class"):
+        for item in soup.select(".itemslist .item"):
+            title = item.select_one(".desc h1")
+            location = item.select_one(".desc .location")
+            price = item.select_one(".desc .price")
+            image = item.select_one(".image img")
+            link = item.select_one("a")
+            if not all((title, location, price, image, link)):
                 continue
-
-            params = item.select(".params > li")
 
             items.append(RentalOffer(
                 scraper = self,
-                link = urljoin(self.base_url, item.select_one("a.main").get("href")),
-                title = "Pronájem " + params[1].find("strong").get_text().strip() + ", " + params[2].find("strong").get_text().strip(),
-                location = item.select_one(".location").get_text().strip(),
-                price = int(re.sub(r"[^\d]", "", [text for text in item.select_one(".price").stripped_strings][0])),
-                image_url = urljoin(self.base_url, item.select_one(".img > img").get("src"))
+                link = urljoin(self.base_url, link.get("href")),
+                title = title.get_text().strip(),
+                location = location.get_text().strip(),
+                price = int(re.sub(r"[^\d]", "", next(price.stripped_strings, "0")) or "0"),
+                image_url = urljoin(self.base_url, image.get("src"))
             ))
 
         return items

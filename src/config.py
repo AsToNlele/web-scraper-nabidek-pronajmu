@@ -60,6 +60,7 @@ class Config:
     update_channel_topic: bool = environ.bool_var(default=False)
     price_min: int | None = environ.var(default=None, converter=optional_int_converter)
     price_max: int | None = environ.var(default=None, converter=optional_int_converter)
+    required_localities: list[str] = environ.var(default=["Brno"], converter=list_converter)
     excluded_localities: list[str] = environ.var(default=[], converter=list_converter)
     found_offers_file: Path = environ.var(converter=Path)
     refresh_interval_daytime_minutes: int = environ.var(converter=int)

@@ -10,9 +10,15 @@ from scrapers.rental_offer import RentalOffer
 class OfferFilter:
     price_min: int | None = None
     price_max: int | None = None
+    required_localities: list[str] | None = None
     excluded_localities: list[str] | None = None
 
     def __post_init__(self):
+        self.required_localities = [
+            normalize_text(locality)
+            for locality in (self.required_localities or [])
+            if locality.strip()
+        ]
         self.excluded_localities = [
             normalize_text(locality)
             for locality in (self.excluded_localities or [])
@@ -45,6 +51,9 @@ class OfferFilter:
             return f"price {price} above maximum {self.price_max}"
 
         location = normalize_text(offer.location)
+        if self.required_localities and not any(locality in location for locality in self.required_localities):
+            return f"missing required locality {', '.join(self.required_localities)}"
+
         for locality in self.excluded_localities:
             if locality in location:
                 return f"excluded locality {locality}"

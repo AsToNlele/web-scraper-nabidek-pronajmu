@@ -28,6 +28,7 @@ scrapers = create_scrapers(config.dispositions)
 offer_filter = OfferFilter(
     price_min=config.price_min,
     price_max=config.price_max,
+    required_localities=config.required_localities,
     excluded_localities=config.excluded_localities
 )
 
@@ -87,12 +88,13 @@ async def on_ready():
 
     logging.info("Available scrapers: " + ", ".join([s.name for s in scrapers]))
     logging.info(
-        "Effective config: debug=%s force_discord=%s update_channel_topic=%s price_min=%s price_max=%s excluded_localities=%s found_offers_file=%s offers_channel=%s saved_channel=%s dev_channel=%s",
+        "Effective config: debug=%s force_discord=%s update_channel_topic=%s price_min=%s price_max=%s required_localities=%s excluded_localities=%s found_offers_file=%s offers_channel=%s saved_channel=%s dev_channel=%s",
         config.debug,
         config.force_discord,
         config.update_channel_topic,
         config.price_min,
         config.price_max,
+        config.required_localities,
         config.excluded_localities,
         config.found_offers_file,
         config.discord.offers_channel,

@@ -1,16 +1,14 @@
+import json
 import logging
-from time import time
-from urllib.parse import urljoin
+import re
+from urllib.parse import quote, urljoin
 
 import requests
+from bs4 import BeautifulSoup
 
 from disposition import Disposition
 from scrapers.rental_offer import RentalOffer
 from scrapers.scraper_base import ScraperBase
-from scrapers.rental_offer import RentalOffer
-from time import time
-import requests
-from urllib.parse import urljoin
 
 
 class ScraperSreality(ScraperBase):
@@ -21,118 +19,94 @@ class ScraperSreality(ScraperBase):
     base_url = "https://www.sreality.cz"
 
     disposition_mapping = {
-        Disposition.FLAT_1KK: "2",
-        Disposition.FLAT_1: "3",
-        Disposition.FLAT_2KK: "4",
-        Disposition.FLAT_2: "5",
-        Disposition.FLAT_3KK: "6",
-        Disposition.FLAT_3: "7",
-        Disposition.FLAT_4KK: "8",
-        Disposition.FLAT_4: "9",
-        Disposition.FLAT_5_UP: ("10", "11", "12"),
-        Disposition.FLAT_OTHERS: "16",
+        Disposition.FLAT_1KK: "1+kk",
+        Disposition.FLAT_1: "1+1",
+        Disposition.FLAT_2KK: "2+kk",
+        Disposition.FLAT_2: "2+1",
+        Disposition.FLAT_3KK: "3+kk",
+        Disposition.FLAT_3: "3+1",
+        Disposition.FLAT_4KK: "4+kk",
+        Disposition.FLAT_4: "4+1",
+        Disposition.FLAT_5_UP: ("5+kk", "5+1", "6-a-vice"),
+        Disposition.FLAT_OTHERS: "atypicky",
     }
-
-    _category_type_to_url = {
-        0: "vse",
-        1: "prodej",
-        2: "pronajem",
-        3: "drazby"
-    }
-
-    _category_main_to_url = {
-        0: "vse",
-        1: "byt",
-        2: "dum",
-        3: "pozemek",
-        4: "komercni",
-        5: "ostatni"
-    }
-
-    _category_sub_to_url = {
-            2: "1+kk",
-            3: "1+1",
-            4: "2+kk",
-            5: "2+1",
-            6: "3+kk",
-            7: "3+1",
-            8: "4+kk",
-            9: "4+1",
-            10: "5+kk",
-            11: "5+1",
-            12: "6-a-vice",
-            16: "atypicky",
-            47: "pokoj",
-            37: "rodinny",
-            39: "vila",
-            43: "chalupa",
-            33: "chata",
-            35: "pamatka",
-            40: "na-klic",
-            44: "zemedelska-usedlost",
-            19: "bydleni",
-            18: "komercni",
-            20: "pole",
-            22: "louka",
-            21: "les",
-            46: "rybnik",
-            48: "sady-vinice",
-            23: "zahrada",
-            24: "ostatni-pozemky",
-            25: "kancelare",
-            26: "sklad",
-            27: "vyrobni-prostor",
-            28: "obchodni-prostor",
-            29: "ubytovani",
-            30: "restaurace",
-            31: "zemedelsky",
-            38: "cinzovni-dum",
-            49: "virtualni-kancelar",
-            32: "ostatni-komercni-prostory",
-            34: "garaz",
-            52: "garazove-stani",
-            50: "vinny-sklep",
-            51: "pudni-prostor",
-            53: "mobilni-domek",
-            36: "jine-nemovitosti"
-        }
-
 
     def _create_link_to_offer(self, offer) -> str:
-        return urljoin(self.base_url, "/detail" +
-            "/" + self._category_type_to_url[offer["seo"]["category_type_cb"]] +
-            "/" + self._category_main_to_url[offer["seo"]["category_main_cb"]] +
-            "/" + self._category_sub_to_url[offer["seo"]["category_sub_cb"]] +
-            "/" + offer["seo"]["locality"] +
-            "/" + str(offer["hash_id"]))
+        locality = offer.get("locality", {})
+        locality_slug = "-".join(filter(None, [
+            locality.get("citySeoName"),
+            locality.get("cityPartSeoName"),
+            locality.get("streetSeoName")
+        ]))
+        category_sub = self._slugify_disposition(offer["categorySubCb"]["name"])
+
+        return urljoin(
+            self.base_url,
+            f"/detail/pronajem/byt/{category_sub}/{locality_slug}/{offer['id']}"
+        )
+
+    @staticmethod
+    def _slugify_disposition(value: str) -> str:
+        return re.sub(r"\s+", "-", value.strip().lower()).replace("více", "vice")
+
+    @staticmethod
+    def _format_location(locality: dict) -> str:
+        return ", ".join(filter(None, [
+            locality.get("street"),
+            locality.get("cityPart"),
+            locality.get("city")
+        ]))
+
+    @staticmethod
+    def _find_search_results(payload: dict) -> list[dict]:
+        queries = payload.get("props", {}).get("pageProps", {}).get("dehydratedState", {}).get("queries", [])
+        for query in queries:
+            data = query.get("state", {}).get("data")
+            if isinstance(data, dict) and isinstance(data.get("results"), list):
+                return data["results"]
+        return []
 
     def build_response(self) -> requests.Response:
-        url = self.base_url + "/api/cs/v2/estates?category_main_cb=1&category_sub_cb="
-        url += "|".join(self.get_dispositions_data())
-        url += "&category_type_cb=2&locality_district_id=72&locality_region_id=14&per_page=20"
-        url += "&tms=" + str(int(time()))
+        dispositions = quote(",".join(self.get_dispositions_data()), safe=",")
+        url = self.base_url + f"/hledani/pronajem/byty/brno?velikost={dispositions}"
 
         logging.debug("Sreality request: %s", url)
 
         return requests.get(url, headers=self.headers)
 
     def get_latest_offers(self) -> list[RentalOffer]:
-        response = self.build_response().json()
+        raw_response = self.build_response()
+        if not raw_response.ok:
+            logging.warning(
+                "Sreality request failed with HTTP %s, skipping scraper",
+                raw_response.status_code
+            )
+            return []
+
+        soup = BeautifulSoup(raw_response.text, "html.parser")
+        next_data = soup.find("script", id="__NEXT_DATA__")
+        if not next_data or not next_data.string:
+            logging.warning("Sreality response did not include search data, skipping scraper")
+            return []
+
+        try:
+            response = json.loads(next_data.string)
+        except ValueError:
+            logging.warning("Sreality search data could not be parsed, skipping scraper")
+            return []
 
         items: list[RentalOffer] = []
 
-        for item in response["_embedded"]["estates"]:
-            # Ignorovat "tip" nabídky, které úplně neodpovídají filtrům a mění se s každým vyhledáváním
-            if item["region_tip"] > 0:
-                continue
-
+        for item in self._find_search_results(response):
+            images = item.get("images") or []
+            image_url = images[0]["url"] if images else ""
             items.append(RentalOffer(
                 scraper = self,
                 link = self._create_link_to_offer(item),
                 title = item["name"],
-                location = item["locality"],
-                price = item["price_czk"]["value_raw"],
-                image_url = item["_links"]["image_middle2"][0]["href"]
+                location = self._format_location(item.get("locality", {})),
+                price = item["priceCzk"],
+                image_url = "https:" + image_url if image_url.startswith("//") else image_url
             ))
 
         return items

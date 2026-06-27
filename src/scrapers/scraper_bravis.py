@@ -40,23 +40,47 @@ class ScraperBravis(ScraperBase):
 
     def get_latest_offers(self) -> list[RentalOffer]:
         response = self.build_response()
+        if not response.ok:
+            logging.warning("BRAVIS request failed with HTTP %s, skipping scraper", response.status_code)
+            return []
+
         soup = BeautifulSoup(response.text, 'html.parser')
 
         items: list[RentalOffer] = []
 
-        for item in soup.select("#search > .in > .itemslist > li"):
-            if item.get("class"):
+        for item in soup.select(".itemslist .item"):
+            title = item.select_one(".desc h1")
+            location = item.select_one(".desc .location")
+            price = item.select_one(".desc .price")
+            image = item.select_one(".image img")
+            link = item.select_one("a")
+            if not all((title, location, price, image, link)):
                 continue
-
-            params = item.select(".params > li")
+            rent_price = int(re.sub(r"[^\d]", "", next(price.stripped_strings, "0")) or "0")
+            total_price = rent_price + parse_monthly_fee(price)
 
             items.append(RentalOffer(
                 scraper = self,
-                link = urljoin(self.base_url, item.select_one("a.main").get("href")),
-                title = "Pronájem " + params[1].find("strong").get_text().strip() + ", " + params[2].find("strong").get_text().strip(),
-                location = item.select_one(".location").get_text().strip(),
-                price = int(re.sub(r"[^\d]", "", [text for text in item.select_one(".price").stripped_strings][0])),
-                image_url = urljoin(self.base_url, item.select_one(".img > img").get("src"))
+                link = urljoin(self.base_url, link.get("href")),
+                title = title.get_text().strip(),
+                location = location.get_text().strip(),
+                price = rent_price,
+                image_url = urljoin(self.base_url, image.get("src")),
+                total_price = total_price,
+                rent_price = rent_price,
+                fees_price = total_price - rent_price,
             ))
 
         return items
+
+
+def parse_monthly_fee(price_element) -> int:
+    fee_text = price_element.find("small")
+    if fee_text is None:
+        return 0
+
+    match = re.search(r"\+?\s*(\d[\d\s\u00a0.]*)", fee_text.get_text())
+    if not match:
+        return 0
+
+    return int(re.sub(r"\D", "", match.group(1)) or "0")

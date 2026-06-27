@@ -36,11 +36,31 @@ def dispositions_converter(raw_disps: str):
     return functools.reduce(operator.or_, map(lambda d: _str_to_disposition_map[d], raw_disps.split(",")), Disposition.NONE)
 
 
+def optional_int_converter(value: str | None) -> int | None:
+    if value is None:
+        return None
+
+    value = value.strip()
+    return int(value) if value else None
+
+
+def list_converter(value: str | list[str] | None) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 @environ.config(prefix="")
 class Config:
     debug: bool = environ.bool_var()
     force_discord: bool = environ.bool_var(default=False)
     update_channel_topic: bool = environ.bool_var(default=False)
+    price_min: int | None = environ.var(default=None, converter=optional_int_converter)
+    price_max: int | None = environ.var(default=None, converter=optional_int_converter)
+    excluded_localities: list[str] = environ.var(default=[], converter=list_converter)
     found_offers_file: Path = environ.var(converter=Path)
     refresh_interval_daytime_minutes: int = environ.var(converter=int)
     refresh_interval_nighttime_minutes: int = environ.var(converter=int)

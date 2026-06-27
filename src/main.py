@@ -9,6 +9,7 @@ from discord.ext import tasks
 
 from config import *
 from discord_logger import DiscordLogger
+from offers_filter import OfferFilter
 from offers_storage import OffersStorage
 from scrapers.rental_offer import RentalOffer
 from scrapers_manager import create_scrapers, fetch_latest_offers
@@ -22,6 +23,11 @@ daytime = get_current_daytime()
 interval_time = config.refresh_interval_daytime_minutes if daytime else config.refresh_interval_nighttime_minutes
 
 scrapers = create_scrapers(config.dispositions)
+offer_filter = OfferFilter(
+    price_min=config.price_min,
+    price_max=config.price_max,
+    excluded_localities=config.excluded_localities
+)
 
 
 def discord_enabled() -> bool:
@@ -48,10 +54,13 @@ async def on_ready():
 
     logging.info("Available scrapers: " + ", ".join([s.name for s in scrapers]))
     logging.info(
-        "Effective config: debug=%s force_discord=%s update_channel_topic=%s found_offers_file=%s offers_channel=%s dev_channel=%s",
+        "Effective config: debug=%s force_discord=%s update_channel_topic=%s price_min=%s price_max=%s excluded_localities=%s found_offers_file=%s offers_channel=%s dev_channel=%s",
         config.debug,
         config.force_discord,
         config.update_channel_topic,
+        config.price_min,
+        config.price_max,
+        config.excluded_localities,
         config.found_offers_file,
         config.discord.offers_channel,
         config.discord.dev_channel
@@ -73,19 +82,23 @@ async def process_latest_offers():
     first_time = storage.first_time
 
     logging.info("Offers fetched (new: {})".format(len(new_offers)))
+    filtered_offers, rejected_offers = offer_filter.filter(new_offers)
+    logging.info("Offers after filtering: %s accepted, %s rejected", len(filtered_offers), len(rejected_offers))
 
     if config.debug and not config.force_discord:
         logging.info("Debug mode is active, skipping Discord publishing")
         storage.save_offers(new_offers)
     elif should_publish_offers(first_time):
-        if not new_offers:
+        storage.save_offers(rejected_offers)
+
+        if not filtered_offers:
             logging.info("No new offers to publish")
 
         def chunk_offers(offers, size):
             for i in range(0, len(offers), size):
                 yield offers[i:i + size]
 
-        for offer_batch in chunk_offers(new_offers, config.embed_batch_size):
+        for offer_batch in chunk_offers(filtered_offers, config.embed_batch_size):
             embeds = []
 
             for offer in offer_batch:

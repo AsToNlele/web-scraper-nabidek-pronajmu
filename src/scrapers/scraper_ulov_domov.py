@@ -6,8 +6,6 @@ import requests
 from disposition import Disposition
 from scrapers.rental_offer import RentalOffer
 from scrapers.scraper_base import ScraperBase
-from scrapers.rental_offer import RentalOffer
-import requests
 
 
 class ScraperUlovDomov(ScraperBase):
@@ -98,6 +96,10 @@ class ScraperUlovDomov(ScraperBase):
 
         items: list[RentalOffer] = []
         for offer in response["offers"]:
+            rent_price = offer["price_rental"]
+            fees_price = offer["price_monthly_fee"]
+            total_price = rent_price + fees_price if fees_price is not None else rent_price
+
             location = offer["village"]["label"]
             if offer["street"] is not None:
                 location = offer["street"]["label"] + ", " + location
@@ -110,11 +112,11 @@ class ScraperUlovDomov(ScraperBase):
                 # TODO "Pronájem" podle ID?
                 title = "Pronájem " + self.disposition_id_to_string(offer["disposition_id"]) + " " + str(offer["acreage"]) + " m²",
                 location = location,
-                price = offer["price_rental"],
+                price = rent_price,
                 image_url = offer["photos"][0]["path"],
-                total_price = offer["price_rental"] + offer["price_monthly_fee"],
-                rent_price = offer["price_rental"],
-                fees_price = offer["price_monthly_fee"],
+                total_price = total_price,
+                rent_price = rent_price,
+                fees_price = fees_price,
             ))
 
         return items
